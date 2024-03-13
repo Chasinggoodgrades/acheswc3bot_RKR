@@ -1,25 +1,52 @@
 ## Author: @Chasinggoodgrades
 ## Date: 2023-9-24
-## Version: 1.0.0
+## Version: 1.0.1
 
 ## Imports
 import discord
 import requests
 import asyncio
+import re
 
 ## Initialize bot
 intents = discord.Intents.default()
-intents.message_content = True
 client = discord.Client(intents=intents)
 
-## Global variables
+# Global variables
 posted_lobbies = {}
+regex_patterns = []
+
+# Define the file path to regex.txt
+file_path = 'regex.txt'
+def read_regex_patterns(file_path):
+    patterns = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            pattern = line.strip()  # Remove leading/trailing whitespace
+            patterns.append(pattern)
+    return patterns
+
+# Read regex patterns from regex.txt
+regex_patterns = read_regex_patterns(file_path)
+
+def CheckStatus():
+    response = requests.get("https://api.wc3stats.com/gamelist")
+    print(response.status_code)
+    print(response.json())
+    return response.status_code
 def getLobbies():
     response = requests.get("https://api.wc3stats.com/gamelist")
     body = response.json()['body']
     lobbies = []
+
+    ## Regex
+    exclude_map_pattern = re.compile(r'(TD|Tower)', re.IGNORECASE)
+    map_name_pattern = re.compile('|'.join(regex_patterns), re.IGNORECASE)
     for lobby in body:
-        if "Hero" in lobby['map']:
+        map_name = lobby['map']
+        if re.search(exclude_map_pattern, map_name):
+            continue
+        if re.search(map_name_pattern, map_name):
             lobbies.append(lobby)
     print(lobbies)
     return lobbies
@@ -33,9 +60,58 @@ def embedLobby(lobby):
     embed.add_field(name="", value=lobby['map'], inline=False)
     return embed
 
+## Listen for commands
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+
+    # Check if the message is a command to list regex patterns
+    if message.content.startswith('!list'):
+        await list_regex(message.channel)
+
+    # Check if the message is a command to add a new regex pattern
+    elif message.content.startswith('!add'):
+        await add_regex(message.channel, message.content[len('!add'):])
+
+    # Check if the message is a command to remove an existing regex pattern
+    elif message.content.startswith('!remove'):
+        await remove_regex(message.channel, message.content[len('!remove'):])
+
+    elif message.content.startswith('!status'):
+        await message.channel.send(CheckStatus())
+
+    else:
+        # Your existing code for other functionalities...
+        pass
+
+async def list_regex(channel):
+    """List all current regex patterns."""
+    responsestring = "\n".join(regex_patterns)
+    await channel.send(responsestring if responsestring else "No patterns found.")
+
+async def add_regex(channel, new_pattern):
+    """Add a new regex pattern."""
+    regex_patterns.append(new_pattern.strip())
+    with open(file_path, 'a') as file:
+        file.write(new_pattern.strip() + '\n')
+    await channel.send(f"'{new_pattern.strip()}' added to search list.")
+
+async def remove_regex(channel, pattern_to_remove):
+    """Remove an existing regex pattern."""
+    pattern_to_remove = pattern_to_remove.strip()
+    if pattern_to_remove in regex_patterns:
+        regex_patterns.remove(pattern_to_remove)
+        with open(file_path, 'w') as file:
+            for pattern in regex_patterns:
+                file.write(pattern + '\n')
+        await channel.send(f"'{pattern_to_remove}' removed from search list.")
+    else:
+        await channel.send("Not found")
+
 async def updateLobbyMessages():
     await client.wait_until_ready()
-    channel = client.get_channel(452619334150520844)
+    channel = client.get_channel(_CHANNEL_HERE_)
     while not client.is_closed():
         lobbies = getLobbies()
 
@@ -66,8 +142,8 @@ async def updateLobbyMessages():
 @client.event
 async def on_ready():
     print('Logged in as {0.user}'.format(client))
-    await client.change_presence(activity=discord.Game('Run Kitty Run'))
+    await client.change_presence(activity=discord.Game('Warcraft III'))
     await updateLobbyMessages()
 
 ## Run bot
-client.run('MTEwNDI3NTQyMDUxNTQwMTczOQ.GjaH6A.FuOgsQOcej4dGzIdIFlRwQtR-P5QotMaHEKlRM')
+client.run('API_KEY_HERE')
