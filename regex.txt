@@ -1,0 +1,6 @@
+Run\s*Kitty\s*Run
+RKR
+Run_Kitty
+slide
+maze
+escape
